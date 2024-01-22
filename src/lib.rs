@@ -79,6 +79,7 @@ pub struct Config {
     no_build_target: bool,
     verbose_cmake: bool,
     verbose_make: bool,
+    skip_compiler_flags: bool,
     pic: Option<bool>,
     c_cfg: Option<cc::Build>,
     cxx_cfg: Option<cc::Build>,
@@ -203,6 +204,7 @@ impl Config {
             no_build_target: false,
             verbose_cmake: false,
             verbose_make: false,
+            skip_compiler_flags: false,
             pic: None,
             c_cfg: None,
             cxx_cfg: None,
@@ -393,6 +395,12 @@ impl Config {
     pub fn very_verbose(&mut self, value: bool) -> &mut Config {
         self.verbose_cmake = value;
         self.verbose_make = value;
+        self
+    }
+
+    /// Doesn't set any compiler flags if set.
+    pub fn skip_compiler_flags(&mut self, value: bool) -> &mut Config {
+        self.skip_compiler_flags = value;
         self
     }
 
@@ -792,9 +800,11 @@ impl Config {
                 }
             };
 
-            set_compiler("C", &c_compiler, &self.cflags);
-            set_compiler("CXX", &cxx_compiler, &self.cxxflags);
-            set_compiler("ASM", &asm_compiler, &self.asmflags);
+            if !self.skip_compiler_flags {
+                set_compiler("C", &c_compiler, &self.cflags);
+                set_compiler("CXX", &cxx_compiler, &self.cxxflags);
+                set_compiler("ASM", &asm_compiler, &self.asmflags);
+            }
         }
 
         if !self.defined("CMAKE_BUILD_TYPE") {
