@@ -84,6 +84,7 @@ pub struct Config {
     c_cfg: Option<cc::Build>,
     cxx_cfg: Option<cc::Build>,
     env_cache: HashMap<String, Option<OsString>>,
+    num_jobs: Option<u8>,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -209,6 +210,7 @@ impl Config {
             c_cfg: None,
             cxx_cfg: None,
             env_cache: HashMap::new(),
+            num_jobs: Some(1),
         }
     }
 
@@ -225,6 +227,14 @@ impl Config {
     /// build target.
     pub fn generator<T: AsRef<OsStr>>(&mut self, generator: T) -> &mut Config {
         self.generator = Some(generator.as_ref().to_owned());
+        self
+    }
+
+    /// Sets the parallel build (`-j`) for this compilation.
+    ///
+    /// If unset, defaults to 1
+    pub fn parallel(&mut self, num_jobs: u8) -> &mut Config {
+        self.num_jobs = Some(num_jobs);
         self
     }
 
@@ -835,27 +845,27 @@ impl Config {
         }
 
         // If the generated project is Makefile based we should carefully transfer corresponding CARGO_MAKEFLAGS
-        let mut use_jobserver = false;
-        if fs::metadata(&build.join("Makefile")).is_ok() {
-            match env::var_os("CARGO_MAKEFLAGS") {
-                // Only do this on non-windows and non-bsd
-                // On Windows, we could be invoking make instead of
-                // mingw32-make which doesn't work with our jobserver
-                // bsdmake also does not work with our job server
-                Some(ref makeflags)
-                    if !(cfg!(windows)
-                        || cfg!(target_os = "openbsd")
-                        || cfg!(target_os = "netbsd")
-                        || cfg!(target_os = "freebsd")
-                        || cfg!(target_os = "bitrig")
-                        || cfg!(target_os = "dragonflybsd")) =>
-                {
-                    use_jobserver = true;
-                    cmd.env("MAKEFLAGS", makeflags);
-                }
-                _ => {}
-            }
-        }
+        // let use_jobserver = false;
+        // if fs::metadata(&build.join("Makefile")).is_ok() {
+        //     match env::var_os("CARGO_MAKEFLAGS") {
+        //         // Only do this on non-windows and non-bsd
+        //         // On Windows, we could be invoking make instead of
+        //         // mingw32-make which doesn't work with our jobserver
+        //         // bsdmake also does not work with our job server
+        //         Some(ref makeflags)
+        //             if !(cfg!(windows)
+        //                 || cfg!(target_os = "openbsd")
+        //                 || cfg!(target_os = "netbsd")
+        //                 || cfg!(target_os = "freebsd")
+        //                 || cfg!(target_os = "bitrig")
+        //                 || cfg!(target_os = "dragonflybsd")) =>
+        //         {
+        //             use_jobserver = true;
+        //             cmd.env("MAKEFLAGS", makeflags);
+        //         }
+        //         _ => {}
+        //     }
+        // }
 
         cmd.arg("--build").arg(".");
 
@@ -871,10 +881,10 @@ impl Config {
 
         // --parallel requires CMake 3.12:
         // https://cmake.org/cmake/help/latest/release/3.12.html#command-line
-        if version >= Version::new(3, 12) && !use_jobserver {
-            if let Ok(s) = env::var("NUM_JOBS") {
+        if version >= Version::new(3, 12) {
+            if let Some(s) = self.num_jobs {
                 // See https://cmake.org/cmake/help/v3.12/manual/cmake.1.html#build-tool-mode
-                cmd.arg("--parallel").arg(s);
+                cmd.arg("--parallel").arg(s.to_string());
             }
         }
 
